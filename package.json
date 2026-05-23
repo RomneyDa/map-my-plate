@@ -5,9 +5,17 @@
   "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "pnpm --filter @map-my-plate/app dev",
+    "dev:secrets": "node scripts/soup.mjs run -- pnpm dev",
     "build": "turbo run build",
     "build:app": "turbo run build --filter=@map-my-plate/app",
-    "typecheck": "turbo run typecheck"
+    "build:secrets": "node scripts/soup.mjs run -- pnpm build",
+    "typecheck": "turbo run typecheck",
+    "typecheck:secrets": "node scripts/soup.mjs run -- pnpm typecheck",
+    "secrets:login": "node scripts/soup.mjs login",
+    "secrets:login:device": "node scripts/soup.mjs login --device",
+    "secrets:config": "node scripts/soup.mjs config --project map-my-plate --env development",
+    "secrets:list": "node scripts/soup.mjs secrets list",
+    "secrets:version": "node scripts/soup.mjs version"
   },
   "devDependencies": {
     "turbo": "^2.9.14",

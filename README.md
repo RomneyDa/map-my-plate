@@ -17,6 +17,16 @@ pnpm dev
 
 The web app runs from `app/`.
 
+For shared secrets, use Soup:
+
+```bash
+pnpm secrets:login
+pnpm secrets:config
+pnpm dev:secrets
+```
+
+See [docs/secrets.md](docs/secrets.md).
+
 ## Vercel
 
 Create a Vercel project for the web app with:

@@ -4,7 +4,7 @@ import "./styles.css";
 
 export const metadata: Metadata = {
   title: "Map My Plate",
-  description: "AI-first food provenance maps for the world inside your meal.",
+  description: "Food provenance maps for the world inside your meal.",
 };
 
 export const viewport: Viewport = {

@@ -1,6 +1,6 @@
 # Map My Plate
 
-AI-first food provenance maps for understanding where meals likely came from.
+Food provenance maps for understanding where meals likely came from.
 
 ## Structure
 

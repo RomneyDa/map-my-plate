@@ -7,9 +7,9 @@ import {
   Compass,
   LocateFixed,
   MapPin,
-  MessageCircle,
   Moon,
   PackageSearch,
+  Send,
   Share2,
   SlidersHorizontal,
   Sun,
@@ -308,31 +308,29 @@ export default function Home() {
           </div>
 
           <div className="border-t border-border pt-5">
-            <label
-              htmlFor="meal"
-              className="block text-sm font-extrabold text-muted-foreground"
-            >
-              What are you eating?
+            <label htmlFor="meal" className="block text-sm font-extrabold text-muted-foreground">
+              Tell Map My Plate what you&apos;re eating
             </label>
             <textarea
               id="meal"
               value={mealPrompt}
               onChange={(event) => setMealPrompt(event.target.value)}
               rows={4}
+              placeholder="Describe the meal, add what you know about where you bought it, or attach a photo or barcode."
               className="mt-2 w-full resize-y rounded-lg border border-border bg-background/70 p-3 text-foreground outline-none ring-primary/20 transition focus:border-primary focus:ring-4"
             />
             <div className="mt-3 grid gap-2 md:grid-cols-3">
               <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-3 font-extrabold text-primary-foreground transition hover:opacity-90" type="button">
-                <MessageCircle size={17} />
-                Ask AI
+                <Send size={17} />
+                Map my plate
               </button>
               <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 font-extrabold text-card-foreground transition hover:bg-muted" type="button">
                 <Camera size={17} />
-                Photo
+                Add photo
               </button>
               <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 font-extrabold text-card-foreground transition hover:bg-muted" type="button">
                 <PackageSearch size={17} />
-                Barcode
+                Scan barcode
               </button>
             </div>
           </div>
@@ -442,7 +440,7 @@ export default function Home() {
           <div className="grid gap-4 border-t border-border pt-5">
             {[
               "Prototype the chat, map, and evidence graph in Next.js.",
-              "Move reusable AI orchestration and adapters into packages.",
+              "Move reusable orchestration and adapters into packages.",
               "Build a native app with shared core logic and native camera/GPS.",
             ].map((item, index) => (
               <div className="grid grid-cols-[30px_1fr] gap-3" key={item}>

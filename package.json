@@ -1,0 +1,16 @@
+{
+  "name": "map-my-plate",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "pnpm --filter @map-my-plate/app dev",
+    "build": "turbo run build",
+    "build:app": "turbo run build --filter=@map-my-plate/app",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.14",
+    "typescript": "^5.9.3"
+  }
+}

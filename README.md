@@ -33,6 +33,10 @@ This keeps Vercel pointed at the deployable app while still installing and build
 
 The native mobile app should become a separate workspace later, likely under `mobile/`, using React Native or Expo. Shared types, provenance models, evidence merging, adapter clients, and map-state serialization should live in `packages/` so the web prototype and mobile app behave consistently.
 
+## Design System
+
+The app uses a shadcn-inspired Tailwind theme: semantic color tokens, class-based dark mode, utility-first layout, and small local components instead of a heavyweight component library. Prefer Tailwind utilities and the tokens in `app/app/styles.css` for all UI work.
+
 ## API Keys
 
 The first prototype does not require API keys. It uses local sample data and a self-contained map canvas.

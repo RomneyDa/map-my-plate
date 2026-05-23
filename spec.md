@@ -54,6 +54,20 @@ The app updates ingredient origins, confidence scores, map annotations, and the 
 
 Every provenance map is saved with its source conversation, evidence graph, assumptions, generated visual state, and share settings. A shared map can be viewed as a polished artifact. The owner can reopen it later and continue the same AI conversation to update it.
 
+### 6. Use and Update Location
+
+The app should ask for location permission when location would materially improve sourcing estimates. If granted, the app dynamically loads the user's current location and uses it as the default market context for provenance modeling. The user should be able to view, edit, remove, or temporarily override this location at any time.
+
+Location should support multiple levels of precision:
+
+- Current device location
+- User-selected city, state, region, or country
+- Store, restaurant, market, or purchase location
+- Account-level default location
+- Per-meal override location
+
+The app should explain why location matters: the same avocado, salmon, rice, or tomato can have very different likely origins depending on where the user bought or ate it.
+
 ## Core Concepts
 
 ### Meal
@@ -76,6 +90,10 @@ Any information used to support or override an estimate. Evidence can come from 
 
 The saved visual artifact. It contains map geometry, ingredient layers, confidence styling, labels, paths, sources, notes, and share metadata.
 
+### User Location
+
+The user's market context for estimating likely sourcing. Location can come from device permission, account settings, manual entry, store metadata, restaurant metadata, receipt data, or per-meal overrides.
+
 ## Experience Principles
 
 - The first screen should be the working chat and map experience, not a marketing page.
@@ -84,6 +102,7 @@ The saved visual artifact. It contains map geometry, ingredient layers, confiden
 - The user should be able to inspect why an origin was chosen.
 - Manual editing should exist, but the main editing mode should remain conversational.
 - Saved maps should feel worth sharing: clean, visually rich, and understandable without reading the full chat.
+- Location should feel trustworthy and user-controlled. The app should ask for permission clearly, degrade gracefully when permission is denied, and make manual location updates easy.
 
 ## Data Architecture
 
@@ -99,6 +118,8 @@ Recommended model:
 - `Product`
 - `Evidence`
 - `OriginEstimate`
+- `UserLocation`
+- `MealLocation`
 - `MapArtifact`
 - `ShareLink`
 
@@ -112,6 +133,17 @@ Each `OriginEstimate` should reference one or more `Evidence` records and should
 - Source adapter
 - Human-readable rationale
 - Created and superseded timestamps
+
+Each `UserLocation` or `MealLocation` should include:
+
+- Location source: device permission, manual entry, account default, store, restaurant, receipt, or imported metadata
+- Precision level: coordinate, city, region, country, store, or unknown
+- User-facing label
+- Latitude and longitude when available
+- Administrative geography
+- Confidence or verification status
+- Privacy and sharing visibility
+- Created and updated timestamps
 
 ## Adapter Strategy
 
@@ -253,6 +285,7 @@ Purpose:
 
 - Treat user corrections and statements as first-class evidence.
 - Preserve provenance for manual overrides and conversational clarifications.
+- Preserve user-provided location context such as store, restaurant, city, country, or travel location.
 
 Why it matters:
 
@@ -261,6 +294,26 @@ The user often has better information than public datasets. A package label, sti
 Constraints:
 
 - User evidence should be trusted as user-provided, not externally verified.
+
+### Geolocation and Places Adapter
+
+Purpose:
+
+- Request browser or mobile location permission.
+- Resolve current coordinates into city, region, country, and market context.
+- Let users search for and select stores, restaurants, markets, cities, or countries.
+- Convert purchase or meal locations into provenance priors.
+
+Why it matters:
+
+Modern sourcing estimates are market-dependent. Location lets the app estimate what a user in Los Angeles, London, Tokyo, or Mexico City is likely eating, rather than relying on global production averages.
+
+Constraints:
+
+- Exact device location should be optional.
+- The app should support manual location entry for users who deny permission.
+- Location precision should be minimized when exact coordinates are not needed.
+- Location data should not be exposed on shared maps unless the user explicitly chooses to include it.
 
 ## Priority 2: Optional Free or Open Environmental Adapters
 
@@ -369,6 +422,9 @@ The MVP should support:
 - Barcode lookup through Open Food Facts
 - Generic ingredient normalization through USDA FoodData Central
 - Initial probabilistic country-level origin estimates using FAOSTAT and UN Comtrade
+- Permission-based current-location detection
+- Manual location search and per-meal location overrides
+- Location-aware sourcing priors based on the user's market
 - Historical crop-origin layer for supported crops
 - Interactive MapLibre map
 - Saved map artifacts
@@ -382,8 +438,11 @@ The MVP should support:
 - Label OCR
 - Receipt parsing
 - Retailer-specific priors
+- Store and restaurant place lookup
+- Travel mode for meals eaten away from the user's default location
+- Multiple saved user locations
+- More precise region-level and seasonal sourcing models
 - Organic and certification-aware priors
-- Seasonal sourcing models
 - Environmental impact layers
 - Verified producer profiles
 - Brand and restaurant partner portals
@@ -393,7 +452,9 @@ The MVP should support:
 
 ## Open Questions
 
-- What is the right default geography for a user: current location, account location, store location, or user-selected market?
+- What is the right default geography for a user: current location, account location, store location, restaurant location, or user-selected market?
+- How should the app balance exact location usefulness with privacy-preserving coarse market context?
+- When should the app ask for location permission: onboarding, first map generation, barcode scan, or only when a low-confidence estimate would improve?
 - How much of the Open Food Facts-derived data can be cached or remixed without triggering unwanted share-alike obligations for proprietary app data?
 - Should shared maps expose raw evidence, summarized evidence, or both?
 - How should the app represent multi-origin commodities such as flour, sugar, oils, spices, and generic additives?
@@ -409,6 +470,7 @@ Suggested first implementation layers:
 - API layer for conversations, meals, ingredients, maps, and share links
 - Adapter layer for external data sources
 - Provenance engine that merges evidence into origin estimates
+- Location service for permission-based detection, manual overrides, geocoding, and market context
 - Map renderer using MapLibre and stored map state
 - Persistence layer for evidence graphs and saved artifacts
 - Background jobs for slow data lookups and map artifact generation

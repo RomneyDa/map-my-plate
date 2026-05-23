@@ -19,7 +19,12 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-terrain: var(--terrain);
   --color-route: var(--route);
+  --color-route-glow: var(--route-glow);
   --color-water: var(--water);
+  --color-map-grid: var(--map-grid);
+  --color-map-glow-primary: var(--map-glow-primary);
+  --color-map-glow-secondary: var(--map-glow-secondary);
+  --color-surface-shadow: var(--surface-shadow);
 }
 
 :root {
@@ -36,7 +41,12 @@
   --accent-foreground: #1f2520;
   --terrain: #9fbfae;
   --route: #d8603f;
+  --route-glow: #d8603f24;
   --water: #dbece5;
+  --map-grid: #1f252012;
+  --map-glow-primary: #2f6f5529;
+  --map-glow-secondary: #416a8f29;
+  --surface-shadow: #1f25201f;
 }
 
 .dark {
@@ -53,7 +63,12 @@
   --accent-foreground: #1d1708;
   --terrain: #4d725f;
   --route: #f0815e;
+  --route-glow: #f0815e29;
   --water: #172821;
+  --map-grid: #f4efe512;
+  --map-glow-primary: #b8ddc224;
+  --map-glow-secondary: #7fa2c224;
+  --surface-shadow: #00000033;
 }
 
 * {

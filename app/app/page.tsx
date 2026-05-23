@@ -138,7 +138,7 @@ function WorldMap({ mealMap }: { mealMap: MealMap }) {
 
   return (
     <section
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_18px_50px_rgba(31,37,32,0.12)] dark:shadow-black/20"
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_18px_50px_var(--surface-shadow)]"
       aria-label="Ingredient origin map"
     >
       <div className="flex items-center justify-between gap-3 p-5">
@@ -156,8 +156,8 @@ function WorldMap({ mealMap }: { mealMap: MealMap }) {
       </div>
 
       <div className="relative h-[430px] overflow-hidden bg-water md:h-[540px]">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(31,37,32,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(31,37,32,0.07)_1px,transparent_1px)] bg-[length:8.33%_16.66%] [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_92%,transparent)] dark:bg-[linear-gradient(rgba(244,239,229,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(244,239,229,0.07)_1px,transparent_1px)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_38%,rgba(47,111,85,0.16),transparent_22%),radial-gradient(circle_at_68%_40%,rgba(65,106,143,0.16),transparent_28%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(var(--map-grid)_1px,transparent_1px),linear-gradient(90deg,var(--map-grid)_1px,transparent_1px)] bg-[length:8.33%_16.66%] [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_92%,transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_38%,var(--map-glow-primary),transparent_22%),radial-gradient(circle_at_68%_40%,var(--map-glow-secondary),transparent_28%)]" />
 
         {continents.map((shape) => (
           <div
@@ -208,7 +208,7 @@ function WorldMap({ mealMap }: { mealMap: MealMap }) {
               key={ingredient.id}
               style={{ left: `${point.x}%`, top: `${point.y}%` }}
             >
-              <span className="size-3 rounded-full border-[3px] border-card bg-route shadow-[0_0_0_7px_rgba(216,96,63,0.14)]" />
+              <span className="size-3 rounded-full border-[3px] border-card bg-route shadow-[0_0_0_7px_var(--route-glow)]" />
               <span className="hidden max-w-32 rounded-lg border border-border bg-card/95 px-2 py-1 text-xs font-extrabold leading-tight text-card-foreground shadow-lg md:block">
                 {ingredient.ingredient}
               </span>
@@ -220,7 +220,7 @@ function WorldMap({ mealMap }: { mealMap: MealMap }) {
           className="absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 text-primary"
           style={{ left: `${destination.x}%`, top: `${destination.y}%` }}
         >
-          <MapPin className="box-content rounded-full bg-primary p-2 text-primary-foreground shadow-[0_0_0_10px_rgba(47,111,85,0.16)]" size={18} />
+          <MapPin className="box-content rounded-full bg-primary p-2 text-primary-foreground shadow-[0_0_0_10px_var(--map-glow-primary)]" size={18} />
           <span className="max-w-36 rounded-lg border border-border bg-card/95 px-2 py-1 text-xs font-extrabold leading-tight text-card-foreground shadow-lg">
             {mealMap.location.label}
           </span>
@@ -289,9 +289,9 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-background bg-[linear-gradient(135deg,rgba(47,111,85,0.08),transparent_34%),linear-gradient(315deg,rgba(216,96,63,0.10),transparent_34%)] p-3 text-foreground md:p-5">
+    <main className="min-h-screen bg-background bg-[linear-gradient(135deg,var(--map-glow-primary),transparent_34%),linear-gradient(315deg,var(--route-glow),transparent_34%)] p-3 text-foreground md:p-5">
       <section className="mx-auto grid max-w-[1500px] gap-4 lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)_300px]">
-        <aside className="flex flex-col gap-5 rounded-lg border border-border bg-card/90 p-5 shadow-[0_18px_50px_rgba(31,37,32,0.12)] backdrop-blur-xl dark:shadow-black/20 lg:sticky lg:top-5 lg:min-h-[calc(100vh-40px)]">
+        <aside className="flex flex-col gap-5 rounded-lg border border-border bg-card/90 p-5 shadow-[0_18px_50px_var(--surface-shadow)] backdrop-blur-xl lg:sticky lg:top-5 lg:min-h-[calc(100vh-40px)]">
           <div className="grid grid-cols-[48px_1fr_auto] items-start gap-3">
             <div className="grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
               <Compass size={22} />
@@ -398,7 +398,7 @@ export default function Home() {
         <div className="grid gap-4">
           <WorldMap mealMap={mealMap} />
 
-          <section className="rounded-lg border border-border bg-card/90 p-5 shadow-[0_18px_50px_rgba(31,37,32,0.12)] backdrop-blur-xl dark:shadow-black/20">
+          <section className="rounded-lg border border-border bg-card/90 p-5 shadow-[0_18px_50px_var(--surface-shadow)] backdrop-blur-xl">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <span className="block text-xs font-extrabold uppercase tracking-normal text-primary">
@@ -421,7 +421,7 @@ export default function Home() {
           </section>
         </div>
 
-        <aside className="flex flex-col gap-5 rounded-lg border border-border bg-card/90 p-5 text-muted-foreground shadow-[0_18px_50px_rgba(31,37,32,0.12)] backdrop-blur-xl dark:shadow-black/20 lg:col-span-2 xl:sticky xl:top-5 xl:col-span-1 xl:min-h-[calc(100vh-40px)]">
+        <aside className="flex flex-col gap-5 rounded-lg border border-border bg-card/90 p-5 text-muted-foreground shadow-[0_18px_50px_var(--surface-shadow)] backdrop-blur-xl lg:col-span-2 xl:sticky xl:top-5 xl:col-span-1 xl:min-h-[calc(100vh-40px)]">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span className="block text-xs font-extrabold uppercase tracking-normal text-primary">

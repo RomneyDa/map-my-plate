@@ -1,8 +1,8 @@
-# Source My Food Product Specification
+# Map My Plate Product Specification
 
 ## Overview
 
-Source My Food is an AI-first food provenance app that helps people understand where their meals likely came from. A user can describe what they are eating, scan a barcode, upload a package label, or take a photo of a meal. The app decomposes the food into likely ingredients, estimates where those ingredients likely originated or were sourced from, and turns that estimate into a beautiful, editable, shareable world map.
+Map My Plate is an AI-first food provenance app that helps people understand where their meals likely came from. A user can describe what they are eating, scan a barcode, upload a package label, or take a photo of a meal. The app decomposes the food into likely ingredients, estimates where those ingredients likely originated or were sourced from, and turns that estimate into a beautiful, editable, shareable world map.
 
 The app is explicit that most results are probabilistic. It should distinguish between verified evidence, user-provided corrections, public-data estimates, and AI inference. Users can refine a map conversationally: for example, "the avocado sticker says Mexico," "this was organic from Whole Foods," "the salmon package says wild Alaska," or "I made the tortilla myself." Each clarification updates the provenance model and the visual map.
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { MealMap } from "@map-my-plate/core";
+import type { NormalizedImage } from "./lib/image-client";
 
 export type AssistantExplanation = {
   kind: "explanation";
@@ -27,7 +28,7 @@ export type AssistantEntry =
   | AssistantStateChange;
 
 export type ConversationTurn =
-  | { id: string; kind: "user"; text: string }
+  | { id: string; kind: "user"; text: string; imagePreviewUrl?: string }
   | {
       id: string;
       kind: "assistant";
@@ -76,14 +77,16 @@ export function useConversation(initialMealMap: MealMap) {
   const [error, setError] = useState<string | null>(null);
 
   const send = useCallback(
-    async (message: string) => {
+    async (message: string, image?: NormalizedImage | null) => {
       const trimmed = message.trim();
-      if (trimmed.length === 0 || pending) return;
+      if (trimmed.length === 0 && !image) return;
+      if (pending) return;
 
       const userTurn: ConversationTurn = {
         id: newId(),
         kind: "user",
-        text: trimmed,
+        text: trimmed.length > 0 ? trimmed : "(photo attached)",
+        imagePreviewUrl: image?.previewUrl,
       };
       const placeholder: ConversationTurn = {
         id: newId(),
@@ -104,6 +107,7 @@ export function useConversation(initialMealMap: MealMap) {
             message: trimmed,
             mealMap,
             history: apiHistory,
+            image: image ? { base64: image.base64 } : undefined,
           }),
         });
 

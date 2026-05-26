@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   SYSTEM_PROMPT,
   applyToolCall,
+  quarantineExternalData,
   renderMealMapForModel,
   toolDefinitions,
   validateToolCall,
@@ -10,20 +11,30 @@ import {
   type ToolEffect,
   type ValidatedToolCall,
 } from "@map-my-plate/core";
+import {
+  ImageInputError,
+  normalizeImageForModel,
+} from "../../lib/image-server";
 
 export const runtime = "nodejs";
 
 const MAX_TOOL_CALLS_PER_TURN = 24;
 const MAX_USER_MESSAGE_CHARS = 4000;
 const MAX_HISTORY_MESSAGES = 60;
+const MAX_IMAGE_BASE64_CHARS = 20 * 1024 * 1024; // ~15 MB binary
+
+const imageSchema = z.object({
+  base64: z.string().min(1).max(MAX_IMAGE_BASE64_CHARS),
+});
 
 const userTurnSchema = z.object({
-  message: z.string().min(1).max(MAX_USER_MESSAGE_CHARS),
+  message: z.string().max(MAX_USER_MESSAGE_CHARS),
   mealMap: z.unknown(),
   history: z
     .array(z.unknown())
     .max(MAX_HISTORY_MESSAGES)
     .optional(),
+  image: imageSchema.optional(),
 });
 
 export type AssistantTurnEvent =
@@ -38,15 +49,47 @@ export type ChatResponse = {
   budgetExhausted: boolean;
 };
 
-export async function POST(request: Request): Promise<Response> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return Response.json(
-      { error: "ANTHROPIC_API_KEY is not configured on the server." },
-      { status: 500 },
-    );
+function buildUserTurnContent(
+  message: string,
+  image: Awaited<ReturnType<typeof normalizeImageForModel>> | null,
+): Anthropic.ContentBlockParam[] {
+  const blocks: Anthropic.ContentBlockParam[] = [];
+  if (image) {
+    blocks.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: image.mediaType,
+        data: image.base64,
+      },
+    });
+    if (image.gps) {
+      // Pass extracted EXIF GPS as quarantined evidence — the model may use
+      // it for setMealLocation. We intentionally do NOT forward this to
+      // Claude vision via the image bytes (sharp stripped metadata).
+      blocks.push({
+        type: "text",
+        text: quarantineExternalData(
+          "photo-exif",
+          "low",
+          `GPS from photo metadata: latitude=${image.gps.latitude}, longitude=${image.gps.longitude}`,
+        ),
+      });
+    }
   }
+  const trimmed = message.trim();
+  if (trimmed.length > 0) {
+    blocks.push({ type: "text", text: trimmed });
+  } else if (image) {
+    blocks.push({
+      type: "text",
+      text: "Map this meal from the attached photo.",
+    });
+  }
+  return blocks;
+}
 
+export async function POST(request: Request): Promise<Response> {
   let parsed: z.infer<typeof userTurnSchema>;
   try {
     const body = await request.json();
@@ -55,6 +98,35 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(
       { error: error instanceof Error ? error.message : "Invalid request" },
       { status: 400 },
+    );
+  }
+
+  if (parsed.message.trim().length === 0 && !parsed.image) {
+    return Response.json(
+      { error: "Provide a message or an image." },
+      { status: 400 },
+    );
+  }
+
+  let normalizedImage: Awaited<
+    ReturnType<typeof normalizeImageForModel>
+  > | null = null;
+  if (parsed.image) {
+    try {
+      normalizedImage = await normalizeImageForModel(parsed.image.base64);
+    } catch (error) {
+      if (error instanceof ImageInputError) {
+        return Response.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+  }
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return Response.json(
+      { error: "ANTHROPIC_API_KEY is not configured on the server." },
+      { status: 500 },
     );
   }
 
@@ -79,7 +151,7 @@ export async function POST(request: Request): Promise<Response> {
     },
     {
       role: "user",
-      content: [{ type: "text", text: parsed.message }],
+      content: buildUserTurnContent(parsed.message, normalizedImage),
     },
   ];
 

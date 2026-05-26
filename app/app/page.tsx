@@ -20,7 +20,7 @@ import {
   type IngredientOrigin,
   type MealLocation,
 } from "@map-my-plate/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cartoProvider,
   getTheme,
@@ -32,6 +32,15 @@ import {
   type AssistantClarification,
   type ConversationTurn,
 } from "./use-conversation";
+import {
+  ImageRejected,
+  normalizeImageForUpload,
+  type NormalizedImage,
+} from "./lib/image-client";
+
+type PendingImage =
+  | { state: "loading"; previewUrl: string; filename: string }
+  | { state: "ready"; image: NormalizedImage };
 
 const locationPresets: MealLocation[] = [
   {
@@ -506,8 +515,12 @@ export default function Home() {
   const [mapThemeOverride, setMapThemeOverride] = useState<MapThemeId | null>(
     null,
   );
+  const [pendingImage, setPendingImage] =
+    useState<PendingImage | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const locationRef = useRef<HTMLDivElement | null>(null);
   const mapStyleRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { resolvedTheme } = useTheme();
   const provider = cartoProvider;
@@ -572,6 +585,77 @@ export default function Home() {
       }));
     });
   }
+
+  const acceptImageFile = useCallback(async (file: File) => {
+    setImageError(null);
+    const tempUrl = URL.createObjectURL(file);
+    setPendingImage({
+      state: "loading",
+      previewUrl: tempUrl,
+      filename: file.name,
+    });
+    try {
+      const normalized = await normalizeImageForUpload(file);
+      setPendingImage((current) => {
+        if (current?.state === "loading" && current.previewUrl === tempUrl) {
+          URL.revokeObjectURL(tempUrl);
+          return { state: "ready", image: normalized };
+        }
+        URL.revokeObjectURL(normalized.previewUrl);
+        return current;
+      });
+    } catch (error) {
+      URL.revokeObjectURL(tempUrl);
+      setPendingImage(null);
+      setImageError(
+        error instanceof ImageRejected
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Could not process this image.",
+      );
+    }
+  }, []);
+
+  const clearPendingImage = useCallback(() => {
+    setPendingImage((current) => {
+      if (current?.state === "loading") URL.revokeObjectURL(current.previewUrl);
+      if (current?.state === "ready")
+        URL.revokeObjectURL(current.image.previewUrl);
+      return null;
+    });
+    setImageError(null);
+  }, []);
+
+  const submitTurn = useCallback(() => {
+    const text = mealPrompt.trim();
+    const image = pendingImage?.state === "ready" ? pendingImage.image : null;
+    if (text.length === 0 && !image) return;
+    if (pending) return;
+    if (pendingImage?.state === "loading") return; // still normalizing
+    setMealPrompt("");
+    setPendingImage(null);
+    setImageError(null);
+    void send(text, image);
+  }, [mealPrompt, pendingImage, pending, send]);
+
+  useEffect(() => {
+    function onPaste(event: ClipboardEvent) {
+      if (!event.clipboardData) return;
+      for (const item of event.clipboardData.items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault();
+            void acceptImageFile(file);
+            return;
+          }
+        }
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [acceptImageFile]);
 
   return (
     <main className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
@@ -721,13 +805,56 @@ export default function Home() {
           className="pointer-events-auto mx-auto w-full max-w-2xl"
           onSubmit={(event) => {
             event.preventDefault();
-            const text = mealPrompt.trim();
-            if (text.length === 0 || pending) return;
-            setMealPrompt("");
-            void send(text);
+            submitTurn();
           }}
         >
+          {pendingImage || imageError ? (
+            <div className="mb-2 flex items-center gap-2">
+              {pendingImage ? (
+                <div className="flex items-center gap-2 rounded-full border border-border bg-glass-strong p-1 pr-3 shadow-md backdrop-blur-md">
+                  <img
+                    src={
+                      pendingImage.state === "loading"
+                        ? pendingImage.previewUrl
+                        : pendingImage.image.previewUrl
+                    }
+                    alt=""
+                    className="size-8 rounded-full object-cover"
+                  />
+                  <span className="text-[12px] text-foreground/80">
+                    {pendingImage.state === "loading"
+                      ? "Preparing photo…"
+                      : pendingImage.image.fellBack
+                        ? "Photo ready (server-processed)"
+                        : "Photo ready"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearPendingImage}
+                    aria-label="Remove photo"
+                    className="ml-1 grid size-6 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : null}
+              {imageError ? (
+                <p className="text-[12px] text-accent">{imageError}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex items-end gap-2 rounded-3xl border border-border bg-glass-strong p-2 shadow-2xl backdrop-blur-xl">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.heic,.heif"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void acceptImageFile(file);
+              }}
+            />
             <textarea
               value={mealPrompt}
               onChange={(event) => setMealPrompt(event.target.value)}
@@ -742,18 +869,17 @@ export default function Home() {
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  const text = mealPrompt.trim();
-                  if (text.length === 0 || pending) return;
-                  setMealPrompt("");
-                  void send(text);
+                  submitTurn();
                 }
               }}
             />
             <div className="flex items-center gap-1 pr-1">
               <button
                 type="button"
-                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                onClick={() => fileInputRef.current?.click()}
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
                 aria-label="Add photo"
+                disabled={pending}
               >
                 <Camera size={16} />
               </button>
@@ -768,7 +894,12 @@ export default function Home() {
                 type="submit"
                 className="ml-1 grid size-10 place-items-center rounded-full bg-primary text-primary-foreground shadow-md transition hover:opacity-90 disabled:opacity-40"
                 aria-label="Send"
-                disabled={mealPrompt.trim().length === 0 || pending}
+                disabled={
+                  pending ||
+                  pendingImage?.state === "loading" ||
+                  (mealPrompt.trim().length === 0 &&
+                    pendingImage?.state !== "ready")
+                }
               >
                 <Send size={16} />
               </button>

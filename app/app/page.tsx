@@ -1,18 +1,17 @@
 "use client";
 
 import {
-  ArrowUpRight,
   Camera,
-  CircleHelp,
   Compass,
-  LocateFixed,
+  Layers,
+  Locate,
   MapPin,
   Moon,
   PackageSearch,
   Send,
   Share2,
-  SlidersHorizontal,
   Sun,
+  X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import {
@@ -21,9 +20,19 @@ import {
   updateMealLocation,
   type IngredientOrigin,
   type MealLocation,
-  type MealMap,
 } from "@map-my-plate/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  cartoProvider,
+  getTheme,
+  type MapThemeId,
+} from "./map-providers";
+import { TileMapCanvas } from "./tile-map-canvas";
+import {
+  useConversation,
+  type AssistantClarification,
+  type ConversationTurn,
+} from "./use-conversation";
 
 const locationPresets: MealLocation[] = [
   {
@@ -60,24 +69,8 @@ const locationPresets: MealLocation[] = [
   },
 ];
 
-const continents = [
-  "left-[8%] top-[22%] h-[26%] w-[25%] rotate-[-14deg] rounded-[58%_42%_48%_52%]",
-  "left-[25%] top-[51%] h-[29%] w-[12%] rotate-[15deg] rounded-[44%_58%_50%_54%]",
-  "left-[47%] top-[26%] h-[13%] w-[13%] rotate-[8deg] rounded-[46%_54%_45%_55%]",
-  "left-[48%] top-[39%] h-[27%] w-[16%] rotate-[-7deg] rounded-[50%_48%_46%_54%]",
-  "left-[61%] top-[24%] h-[29%] w-[28%] rotate-[4deg] rounded-[52%_48%_48%_52%]",
-  "left-[75%] top-[65%] h-[10%] w-[12%] rotate-[-8deg] rounded-[55%_45%_48%_52%]",
-];
-
-function projectPoint(latitude: number, longitude: number) {
-  return {
-    x: ((longitude + 180) / 360) * 100,
-    y: ((90 - latitude) / 180) * 100,
-  };
-}
-
 function confidenceLabel(value: number) {
-  if (value >= 0.6) return "Higher";
+  if (value >= 0.6) return "High";
   if (value >= 0.42) return "Medium";
   return "Low";
 }
@@ -101,176 +94,468 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="inline-grid size-11 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:opacity-90"
+      className="inline-grid size-10 place-items-center rounded-full border border-border bg-glass text-foreground/80 shadow-sm backdrop-blur-md transition hover:text-foreground hover:bg-glass-strong"
       aria-label="Toggle dark mode"
     >
-      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+      {isDark ? <Sun size={16} /> : <Moon size={16} />}
     </button>
   );
 }
 
-function IconButton({
+function GlassButton({
   label,
   children,
   onClick,
+  active = false,
 }: {
   label: string;
   children: React.ReactNode;
   onClick?: () => void;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-grid size-11 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm transition hover:opacity-90"
       aria-label={label}
+      aria-pressed={active}
+      className={`inline-grid size-10 place-items-center rounded-full border border-border bg-glass text-foreground/80 shadow-sm backdrop-blur-md transition hover:text-foreground hover:bg-glass-strong ${
+        active ? "ring-2 ring-accent/40" : ""
+      }`}
     >
       {children}
     </button>
   );
 }
 
-function WorldMap({ mealMap }: { mealMap: MealMap }) {
-  const destination = projectPoint(
-    mealMap.location.latitude,
-    mealMap.location.longitude,
-  );
 
+function IngredientChip({
+  ingredient,
+  active,
+  dimmed,
+  onClick,
+}: {
+  ingredient: IngredientOrigin;
+  active: boolean;
+  dimmed: boolean;
+  onClick: () => void;
+}) {
+  const confidence = ingredient.confidence;
   return (
-    <section
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_18px_50px_var(--surface-shadow)]"
-      aria-label="Ingredient origin map"
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative flex shrink-0 snap-start items-center gap-3 rounded-full border px-3 py-2 text-left backdrop-blur-md transition ${
+        active
+          ? "border-border-strong bg-glass-strong shadow-lg"
+          : "border-border bg-glass shadow-sm hover:bg-glass-strong"
+      } ${dimmed ? "opacity-60" : "opacity-100"}`}
     >
-      <div className="flex items-center justify-between gap-3 p-5">
-        <div>
-          <span className="block text-xs font-extrabold uppercase tracking-normal text-primary">
-            Live provenance map
-          </span>
-          <h2 className="mt-1 text-xl font-black tracking-normal text-card-foreground">
-            {mealMap.title}
-          </h2>
-        </div>
-        <IconButton label="Share map">
-          <Share2 size={18} />
-        </IconButton>
-      </div>
-
-      <div className="relative h-[430px] overflow-hidden bg-water md:h-[540px]">
-        <div className="absolute inset-0 bg-[linear-gradient(var(--map-grid)_1px,transparent_1px),linear-gradient(90deg,var(--map-grid)_1px,transparent_1px)] bg-[length:8.33%_16.66%] [mask-image:linear-gradient(to_bottom,transparent,black_8%,black_92%,transparent)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_38%,var(--map-glow-primary),transparent_22%),radial-gradient(circle_at_68%_40%,var(--map-glow-secondary),transparent_28%)]" />
-
-        {continents.map((shape) => (
-          <div
-            key={shape}
-            className={`absolute border border-primary/10 bg-terrain/55 shadow-xl shadow-primary/10 ${shape}`}
+      <span
+        className="relative grid size-7 place-items-center rounded-full"
+        style={{ background: "var(--route-glow)" }}
+      >
+        <span
+          className="size-2 rounded-full"
+          style={{ background: "var(--route)" }}
+        />
+      </span>
+      <span className="flex flex-col">
+        <span className="text-[13px] font-medium leading-tight text-foreground">
+          {ingredient.ingredient}
+        </span>
+        <span className="text-[11px] leading-tight text-muted-foreground">
+          {ingredient.origin.label}
+        </span>
+      </span>
+      <span className="ml-1 flex flex-col items-end">
+        <span className="text-[13px] font-semibold tabular-nums text-foreground">
+          {Math.round(ingredient.probability * 100)}%
+        </span>
+        <span className="h-1 w-10 overflow-hidden rounded-full bg-muted">
+          <span
+            className="block h-full rounded-full"
+            style={{
+              width: `${confidence * 100}%`,
+              background: "var(--accent)",
+            }}
           />
-        ))}
-
-        <svg
-          className="absolute inset-0 h-full w-full overflow-visible"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-        >
-          {mealMap.ingredients.map((ingredient) => {
-            const origin = projectPoint(
-              ingredient.origin.latitude,
-              ingredient.origin.longitude,
-            );
-            const midX = (origin.x + destination.x) / 2;
-            const midY = Math.min(origin.y, destination.y) - 10;
-
-            return (
-              <path
-                key={ingredient.id}
-                d={`M ${origin.x} ${origin.y} Q ${midX} ${midY} ${destination.x} ${destination.y}`}
-                fill="none"
-                stroke="var(--route)"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-                style={{
-                  opacity: 0.25 + ingredient.confidence * 0.55,
-                  strokeWidth: 0.2 + ingredient.probability * 0.55,
-                }}
-              />
-            );
-          })}
-        </svg>
-
-        {mealMap.ingredients.map((ingredient) => {
-          const point = projectPoint(
-            ingredient.origin.latitude,
-            ingredient.origin.longitude,
-          );
-
-          return (
-            <div
-              className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5"
-              key={ingredient.id}
-              style={{ left: `${point.x}%`, top: `${point.y}%` }}
-            >
-              <span className="size-3 rounded-full border-[3px] border-card bg-route shadow-[0_0_0_7px_var(--route-glow)]" />
-              <span className="hidden max-w-32 rounded-lg border border-border bg-card/95 px-2 py-1 text-xs font-extrabold leading-tight text-card-foreground shadow-lg md:block">
-                {ingredient.ingredient}
-              </span>
-            </div>
-          );
-        })}
-
-        <div
-          className="absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 text-primary"
-          style={{ left: `${destination.x}%`, top: `${destination.y}%` }}
-        >
-          <MapPin className="box-content rounded-full bg-primary p-2 text-primary-foreground shadow-[0_0_0_10px_var(--map-glow-primary)]" size={18} />
-          <span className="max-w-36 rounded-lg border border-border bg-card/95 px-2 py-1 text-xs font-extrabold leading-tight text-card-foreground shadow-lg">
-            {mealMap.location.label}
-          </span>
-        </div>
-      </div>
-    </section>
+        </span>
+      </span>
+    </button>
   );
 }
 
-function IngredientCard({ ingredient }: { ingredient: IngredientOrigin }) {
+function IngredientDetail({
+  ingredient,
+  onClose,
+}: {
+  ingredient: IngredientOrigin;
+  onClose: () => void;
+}) {
   return (
-    <article className="flex min-h-52 flex-col justify-between rounded-lg border border-border bg-card/80 p-4">
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-black tracking-normal text-card-foreground">
+    <div
+      className="pointer-events-auto w-full max-w-md rounded-2xl border border-border bg-glass-strong p-5 shadow-2xl backdrop-blur-xl"
+      style={{ animation: "mmp-fade-up 220ms ease-out both" }}
+      role="dialog"
+      aria-label={`${ingredient.ingredient} detail`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Likely origin
+          </p>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
             {ingredient.ingredient}
           </h3>
-          <span className="font-black text-primary">
+          <p className="text-sm text-muted-foreground">
+            {ingredient.origin.label}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="grid size-8 place-items-center rounded-full border border-border bg-glass text-muted-foreground transition hover:text-foreground"
+          aria-label="Close ingredient detail"
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Probability
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
             {Math.round(ingredient.probability * 100)}%
-          </span>
+          </p>
         </div>
-        <p className="mt-1 text-sm leading-snug text-muted-foreground">
-          {ingredient.origin.label}
+        <div className="rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Confidence
+          </p>
+          <p className="mt-1 text-lg font-semibold text-foreground">
+            {confidenceLabel(ingredient.confidence)}
+          </p>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${ingredient.confidence * 100}%`,
+                background: "var(--accent)",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-relaxed text-foreground/80">
+        {ingredient.rationale}
+      </p>
+
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-[12px] text-muted-foreground">
+        <span>Source · {sourceLabel(ingredient.source)}</span>
+        <span className="capitalize">{ingredient.category}</span>
+      </div>
+    </div>
+  );
+}
+
+const themeSwatches: Record<MapThemeId, string> = {
+  light: "linear-gradient(135deg, #f4f1ea 0%, #d9d4c8 100%)",
+  dark: "linear-gradient(135deg, #2c3340 0%, #0f141d 100%)",
+  color: "linear-gradient(135deg, #f6e7c3 0%, #b9d4d2 50%, #d59a73 100%)",
+};
+
+function MapStyleMenu({
+  currentId,
+  onSelect,
+  onClose,
+}: {
+  currentId: MapThemeId;
+  onSelect: (id: MapThemeId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="absolute right-0 top-12 z-40 w-56 rounded-2xl border border-border bg-glass-strong p-2 shadow-2xl backdrop-blur-xl"
+      style={{ animation: "mmp-fade-up 200ms ease-out both" }}
+      role="menu"
+    >
+      <p className="px-3 pb-2 pt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        Map style
+      </p>
+      {cartoProvider.themes.map((theme) => {
+        const isActive = currentId === theme.id;
+        return (
+          <button
+            key={theme.id}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onSelect(theme.id);
+              onClose();
+            }}
+            className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition ${
+              isActive
+                ? "bg-muted text-foreground"
+                : "text-foreground/80 hover:bg-muted"
+            }`}
+          >
+            <span
+              className="size-5 shrink-0 rounded-md border border-border-strong"
+              style={{ background: themeSwatches[theme.id] }}
+            />
+            <span className="flex-1 text-left">{theme.label}</span>
+            {isActive ? (
+              <span
+                className="size-1.5 rounded-full"
+                style={{ background: "var(--accent)" }}
+              />
+            ) : null}
+          </button>
+        );
+      })}
+      <p className="border-t border-border px-3 pb-1 pt-2 text-[10px] text-muted-foreground">
+        Free basemaps via {cartoProvider.label}.
+      </p>
+    </div>
+  );
+}
+
+function LocationMenu({
+  current,
+  onSelect,
+  onLocate,
+  onClose,
+}: {
+  current: MealLocation;
+  onSelect: (location: MealLocation) => void;
+  onLocate: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="absolute right-0 top-12 z-40 w-72 rounded-2xl border border-border bg-glass-strong p-2 shadow-2xl backdrop-blur-xl"
+      style={{ animation: "mmp-fade-up 200ms ease-out both" }}
+      role="menu"
+    >
+      <div className="px-3 pb-2 pt-1">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Market context
+        </p>
+        <p className="mt-0.5 text-sm font-medium text-foreground">
+          {current.label}
         </p>
       </div>
-      <div>
-        <div className="mb-2 mt-4 flex items-center justify-between gap-3 text-xs font-extrabold text-muted-foreground">
-          <span>{confidenceLabel(ingredient.confidence)} confidence</span>
-          <span>{sourceLabel(ingredient.source)}</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          <span
-            className="block h-full rounded-full bg-gradient-to-r from-accent to-primary"
-            style={{ width: `${ingredient.confidence * 100}%` }}
-          />
-        </div>
-        <p className="mt-4 text-sm leading-snug text-muted-foreground">
-          {ingredient.rationale}
-        </p>
+      <div className="flex flex-col">
+        {locationPresets.map((preset) => {
+          const isActive = preset.label === current.label;
+          return (
+            <button
+              key={preset.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onSelect(preset);
+                onClose();
+              }}
+              className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm transition ${
+                isActive
+                  ? "bg-muted text-foreground"
+                  : "text-foreground/80 hover:bg-muted"
+              }`}
+            >
+              <span>{preset.label}</span>
+              {isActive ? (
+                <span
+                  className="size-1.5 rounded-full"
+                  style={{ background: "var(--accent)" }}
+                />
+              ) : null}
+            </button>
+          );
+        })}
       </div>
-    </article>
+      <div className="border-t border-border pt-1">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onLocate();
+            onClose();
+          }}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
+        >
+          <Locate size={15} />
+          Use current location
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConversationPanel({
+  turns,
+  pending,
+  onChooseOption,
+}: {
+  turns: ConversationTurn[];
+  pending: boolean;
+  onChooseOption: (value: string) => void;
+}) {
+  // Show only the latest user → assistant pair to keep the deck uncluttered.
+  // The map IS the durable artifact; older explanations live with the data.
+  const latest = useMemo(() => {
+    const lastAssistant = [...turns].reverse().find((t) => t.kind === "assistant");
+    const lastUser = [...turns].reverse().find((t) => t.kind === "user");
+    return { lastUser, lastAssistant };
+  }, [turns]);
+
+  if (!latest.lastUser && !pending) return null;
+
+  const assistant =
+    latest.lastAssistant && latest.lastAssistant.kind === "assistant"
+      ? latest.lastAssistant
+      : null;
+
+  const plan = assistant?.entries.find(
+    (e) => e.kind === "explanation" && e.channel === "plan",
+  );
+  const summary = assistant?.entries.find(
+    (e) => e.kind === "explanation" && e.channel === "summary",
+  );
+  const clarification = assistant?.entries.find(
+    (e): e is AssistantClarification => e.kind === "clarification",
+  );
+
+  return (
+    <div
+      className="pointer-events-auto mx-auto w-full max-w-2xl"
+      style={{ animation: "mmp-fade-up 240ms ease-out both" }}
+    >
+      <div className="space-y-2 rounded-2xl border border-border bg-glass p-3 shadow-lg backdrop-blur-md">
+        {latest.lastUser && latest.lastUser.kind === "user" ? (
+          <p className="text-[12px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground">You · </span>
+            {latest.lastUser.text}
+          </p>
+        ) : null}
+
+        {assistant?.pending || pending ? (
+          <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <span
+              className="inline-block size-1.5 animate-pulse rounded-full"
+              style={{ background: "var(--accent)" }}
+            />
+            Mapping the meal…
+          </p>
+        ) : null}
+
+        {plan && plan.kind === "explanation" ? (
+          <p className="text-[13px] leading-snug text-foreground/90">
+            {plan.text}
+          </p>
+        ) : null}
+
+        {summary && summary.kind === "explanation" ? (
+          <p className="text-[13px] leading-snug text-foreground/90">
+            {summary.text}
+          </p>
+        ) : null}
+
+        {clarification ? (
+          <div className="space-y-2 border-t border-border pt-2">
+            <p className="text-[13px] font-medium text-foreground">
+              {clarification.question}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {clarification.options.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onChooseOption(opt.value)}
+                  disabled={pending}
+                  className="rounded-full border border-border bg-card/70 px-3 py-1 text-[12px] font-medium text-foreground shadow-sm transition hover:bg-muted disabled:opacity-50"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {assistant?.errors.length ? (
+          <p className="border-t border-border pt-2 text-[11px] text-accent">
+            {assistant.errors[0]}
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
 export default function Home() {
-  const [mealPrompt, setMealPrompt] = useState(
-    "Chicken burrito from a supermarket deli",
+  const [mealPrompt, setMealPrompt] = useState("");
+  const { mealMap, setMealMap, turns, pending, send } = useConversation(
+    sampleMealMap,
   );
-  const [mealMap, setMealMap] = useState<MealMap>(sampleMealMap);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [mapStyleOpen, setMapStyleOpen] = useState(false);
+  const [mapThemeOverride, setMapThemeOverride] = useState<MapThemeId | null>(
+    null,
+  );
+  const locationRef = useRef<HTMLDivElement | null>(null);
+  const mapStyleRef = useRef<HTMLDivElement | null>(null);
+
+  const { resolvedTheme } = useTheme();
+  const provider = cartoProvider;
+  const effectiveThemeId: MapThemeId =
+    mapThemeOverride ?? (resolvedTheme === "dark" ? "dark" : "light");
+  const mapTheme = useMemo(
+    () => getTheme(provider, effectiveThemeId),
+    [provider, effectiveThemeId],
+  );
+
   const summary = useMemo(() => summarizeConfidence(mealMap), [mealMap]);
+  const activeIngredient = useMemo(
+    () => mealMap.ingredients.find((i) => i.id === activeId) ?? null,
+    [activeId, mealMap.ingredients],
+  );
+
+  useEffect(() => {
+    if (!locationOpen && !mapStyleOpen) return;
+    function handleClick(event: MouseEvent) {
+      if (
+        locationOpen &&
+        !locationRef.current?.contains(event.target as Node)
+      ) {
+        setLocationOpen(false);
+      }
+      if (
+        mapStyleOpen &&
+        !mapStyleRef.current?.contains(event.target as Node)
+      ) {
+        setMapStyleOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [locationOpen, mapStyleOpen]);
+
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActiveId(null);
+        setLocationOpen(false);
+        setMapStyleOpen(false);
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, []);
 
   function requestLocation() {
     if (!navigator.geolocation) return;
@@ -289,177 +574,212 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-background bg-[linear-gradient(135deg,var(--map-glow-primary),transparent_34%),linear-gradient(315deg,var(--route-glow),transparent_34%)] p-3 text-foreground md:p-5">
-      <section className="mx-auto grid max-w-[1500px] gap-4 lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)_300px]">
-        <aside className="flex flex-col gap-5 rounded-lg border border-border bg-card/90 p-5 shadow-[0_18px_50px_var(--surface-shadow)] backdrop-blur-xl lg:sticky lg:top-5 lg:min-h-[calc(100vh-40px)]">
-          <div className="grid grid-cols-[48px_1fr_auto] items-start gap-3">
-            <div className="grid size-12 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Compass size={22} />
-            </div>
-            <div>
-              <p className="text-xs font-extrabold uppercase tracking-normal text-primary">
-                Map My Plate
-              </p>
-              <h1 className="mt-1 text-4xl font-black leading-none tracking-normal text-card-foreground md:text-[2.7rem]">
-                Map the world inside your meal.
-              </h1>
-            </div>
-            <ThemeToggle />
+    <main className="relative h-[100dvh] w-full overflow-hidden bg-background text-foreground">
+      <TileMapCanvas
+        mealMap={mealMap}
+        activeId={activeId}
+        onSelect={setActiveId}
+        provider={provider}
+        theme={mapTheme}
+      />
+
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 p-4 md:p-6">
+        <div className="pointer-events-auto flex items-center gap-3">
+          <span
+            className="grid size-10 place-items-center rounded-full text-primary-foreground shadow-lg"
+            style={{ background: "var(--primary)" }}
+          >
+            <Compass size={18} />
+          </span>
+          <div className="hidden sm:block">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Map My Plate
+            </p>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">
+              {mealMap.title}
+            </h1>
           </div>
-
-          <div className="border-t border-border pt-5">
-            <label htmlFor="meal" className="block text-sm font-extrabold text-muted-foreground">
-              Tell Map My Plate what you&apos;re eating
-            </label>
-            <textarea
-              id="meal"
-              value={mealPrompt}
-              onChange={(event) => setMealPrompt(event.target.value)}
-              rows={4}
-              placeholder="Describe the meal, add what you know about where you bought it, or attach a photo or barcode."
-              className="mt-2 w-full resize-y rounded-lg border border-border bg-background/70 p-3 text-foreground outline-none ring-primary/20 transition focus:border-primary focus:ring-4"
-            />
-            <div className="mt-3 grid gap-2 md:grid-cols-3">
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-3 font-extrabold text-primary-foreground transition hover:opacity-90" type="button">
-                <Send size={17} />
-                Map my plate
-              </button>
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 font-extrabold text-card-foreground transition hover:bg-muted" type="button">
-                <Camera size={17} />
-                Add photo
-              </button>
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 font-extrabold text-card-foreground transition hover:bg-muted" type="button">
-                <PackageSearch size={17} />
-                Scan barcode
-              </button>
-            </div>
-          </div>
-
-          <div className="border-t border-border pt-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <span className="block text-xs font-extrabold uppercase tracking-normal text-primary">
-                  Market context
-                </span>
-                <h2 className="mt-1 text-xl font-black tracking-normal text-card-foreground">
-                  {mealMap.location.label}
-                </h2>
-              </div>
-              <IconButton label="Use current location" onClick={requestLocation}>
-                <LocateFixed size={18} />
-              </IconButton>
-            </div>
-            <div className="mt-3 grid gap-2">
-              {locationPresets.map((location) => (
-                <button
-                  key={location.label}
-                  type="button"
-                  onClick={() =>
-                    setMealMap((current) => updateMealLocation(current, location))
-                  }
-                  className="min-h-11 rounded-lg border border-border bg-card px-3 text-left font-medium text-card-foreground transition hover:bg-muted"
-                >
-                  {location.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 border-t border-border pt-5">
-            <div className="min-w-0">
-              <strong className="block text-3xl font-black">
-                {mealMap.ingredients.length}
-              </strong>
-              <span className="block text-xs font-extrabold text-muted-foreground">
-                ingredients
-              </span>
-            </div>
-            <div className="min-w-0">
-              <strong className="block text-3xl font-black">
-                {Math.round(summary.averageConfidence * 100)}%
-              </strong>
-              <span className="block text-xs font-extrabold text-muted-foreground">
-                avg confidence
-              </span>
-            </div>
-            <div className="min-w-0">
-              <strong className="block text-3xl font-black">
-                {summary.inferredCount}
-              </strong>
-              <span className="block text-xs font-extrabold text-muted-foreground">
-                estimated
-              </span>
-            </div>
-          </div>
-        </aside>
-
-        <div className="grid gap-4">
-          <WorldMap mealMap={mealMap} />
-
-          <section className="rounded-lg border border-border bg-card/90 p-5 shadow-[0_18px_50px_var(--surface-shadow)] backdrop-blur-xl">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <span className="block text-xs font-extrabold uppercase tracking-normal text-primary">
-                  Ingredient evidence
-                </span>
-                <h2 className="mt-1 text-xl font-black tracking-normal text-card-foreground">
-                  Likely origins
-                </h2>
-              </div>
-              <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 font-extrabold text-card-foreground transition hover:bg-muted" type="button">
-                <SlidersHorizontal size={16} />
-                Tune
-              </button>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 2xl:grid-cols-5">
-              {mealMap.ingredients.map((ingredient) => (
-                <IngredientCard key={ingredient.id} ingredient={ingredient} />
-              ))}
-            </div>
-          </section>
         </div>
 
-        <aside className="flex flex-col gap-5 rounded-lg border border-border bg-card/90 p-5 text-muted-foreground shadow-[0_18px_50px_var(--surface-shadow)] backdrop-blur-xl lg:col-span-2 xl:sticky xl:top-5 xl:col-span-1 xl:min-h-[calc(100vh-40px)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="block text-xs font-extrabold uppercase tracking-normal text-primary">
-                Shared logic plan
+        <div className="pointer-events-auto flex items-center gap-2">
+          <div className="relative" ref={locationRef}>
+            <button
+              type="button"
+              onClick={() => setLocationOpen((open) => !open)}
+              className="flex h-10 items-center gap-2 rounded-full border border-border bg-glass px-3.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-md transition hover:bg-glass-strong"
+              aria-haspopup="menu"
+              aria-expanded={locationOpen}
+            >
+              <MapPin size={14} className="text-accent" />
+              <span className="max-w-[140px] truncate sm:max-w-[200px]">
+                {mealMap.location.label}
               </span>
-              <h2 className="mt-1 text-xl font-black tracking-normal text-card-foreground">
-                Web now, native next
-              </h2>
-            </div>
-            <CircleHelp size={18} />
+            </button>
+            {locationOpen ? (
+              <LocationMenu
+                current={mealMap.location}
+                onSelect={(location) =>
+                  setMealMap((current) => updateMealLocation(current, location))
+                }
+                onLocate={requestLocation}
+                onClose={() => setLocationOpen(false)}
+              />
+            ) : null}
           </div>
-          <p className="border-t border-border pt-5 text-base leading-snug">
-            The provenance model lives in{" "}
-            <code className="font-extrabold text-primary">packages/core</code> so
-            the web app, API routes, background jobs, and future React Native app
-            can reuse the same meal, ingredient, location, and confidence logic.
-          </p>
-          <div className="grid gap-4 border-t border-border pt-5">
-            {[
-              "Prototype the chat, map, and evidence graph in Next.js.",
-              "Move reusable orchestration and adapters into packages.",
-              "Build a native app with shared core logic and native camera/GPS.",
-            ].map((item, index) => (
-              <div className="grid grid-cols-[30px_1fr] gap-3" key={item}>
-                <span className="grid size-[30px] place-items-center rounded-full bg-primary text-sm font-black text-primary-foreground">
-                  {index + 1}
-                </span>
-                <p className="leading-snug">{item}</p>
-              </div>
+          <div className="relative" ref={mapStyleRef}>
+            <GlassButton
+              label="Map style"
+              active={mapStyleOpen}
+              onClick={() => setMapStyleOpen((open) => !open)}
+            >
+              <Layers size={15} />
+            </GlassButton>
+            {mapStyleOpen ? (
+              <MapStyleMenu
+                currentId={effectiveThemeId}
+                onSelect={(id) => setMapThemeOverride(id)}
+                onClose={() => setMapStyleOpen(false)}
+              />
+            ) : null}
+          </div>
+          <GlassButton label="Share map">
+            <Share2 size={15} />
+          </GlassButton>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <div className="pointer-events-none absolute left-4 top-20 z-20 hidden md:left-6 md:block">
+        <div
+          className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-glass px-4 py-2 text-[12px] text-muted-foreground shadow-sm backdrop-blur-md"
+          style={{ animation: "mmp-fade-up 500ms ease-out both" }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span
+              className="size-1.5 rounded-full"
+              style={{ background: "var(--accent)" }}
+            />
+            <span className="font-medium text-foreground">
+              {mealMap.ingredients.length}
+            </span>
+            ingredients
+          </span>
+          <span className="h-3 w-px bg-border-strong" />
+          <span>
+            <span className="font-medium text-foreground tabular-nums">
+              {Math.round(summary.averageConfidence * 100)}%
+            </span>{" "}
+            avg confidence
+          </span>
+          <span className="h-3 w-px bg-border-strong" />
+          <span>
+            <span className="font-medium text-foreground tabular-nums">
+              {summary.inferredCount}
+            </span>{" "}
+            estimated
+          </span>
+        </div>
+      </div>
+
+      {activeIngredient ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-44 z-30 flex justify-center px-4 md:bottom-48">
+          <IngredientDetail
+            ingredient={activeIngredient}
+            onClose={() => setActiveId(null)}
+          />
+        </div>
+      ) : null}
+
+      <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col items-stretch gap-3 px-4 pb-5 md:px-6 md:pb-6">
+        <div className="pointer-events-auto w-full overflow-x-auto pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+          <div className="mx-auto flex w-fit max-w-full snap-x snap-mandatory items-stretch gap-2">
+            {mealMap.ingredients.map((ingredient) => (
+              <IngredientChip
+                key={ingredient.id}
+                ingredient={ingredient}
+                active={activeId === ingredient.id}
+                dimmed={activeId !== null && activeId !== ingredient.id}
+                onClick={() =>
+                  setActiveId((current) =>
+                    current === ingredient.id ? null : ingredient.id,
+                  )
+                }
+              />
             ))}
           </div>
-          <button
-            type="button"
-            className="mt-auto inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 font-extrabold text-primary-foreground transition hover:opacity-90"
-          >
-            Open share preview
-            <ArrowUpRight size={17} />
-          </button>
-        </aside>
-      </section>
+        </div>
+
+        <ConversationPanel
+          turns={turns}
+          onChooseOption={(value) => {
+            void send(value);
+          }}
+          pending={pending}
+        />
+
+        <form
+          className="pointer-events-auto mx-auto w-full max-w-2xl"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = mealPrompt.trim();
+            if (text.length === 0 || pending) return;
+            setMealPrompt("");
+            void send(text);
+          }}
+        >
+          <div className="flex items-end gap-2 rounded-3xl border border-border bg-glass-strong p-2 shadow-2xl backdrop-blur-xl">
+            <textarea
+              value={mealPrompt}
+              onChange={(event) => setMealPrompt(event.target.value)}
+              rows={1}
+              placeholder={
+                pending
+                  ? "Mapping…"
+                  : "Describe a meal, paste a label, or share a photo…"
+              }
+              disabled={pending}
+              className="min-h-10 flex-1 resize-none border-0 bg-transparent px-3 py-2.5 text-[15px] leading-snug text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-70"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  const text = mealPrompt.trim();
+                  if (text.length === 0 || pending) return;
+                  setMealPrompt("");
+                  void send(text);
+                }
+              }}
+            />
+            <div className="flex items-center gap-1 pr-1">
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                aria-label="Add photo"
+              >
+                <Camera size={16} />
+              </button>
+              <button
+                type="button"
+                className="grid size-9 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                aria-label="Scan barcode"
+              >
+                <PackageSearch size={16} />
+              </button>
+              <button
+                type="submit"
+                className="ml-1 grid size-10 place-items-center rounded-full bg-primary text-primary-foreground shadow-md transition hover:opacity-90 disabled:opacity-40"
+                aria-label="Send"
+                disabled={mealPrompt.trim().length === 0 || pending}
+              >
+                <Send size={16} />
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            Every origin shown is an estimate. Tell Map My Plate what you know
+            and the map sharpens.
+          </p>
+        </form>
+      </footer>
     </main>
   );
 }

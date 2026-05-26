@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Contain Leaflet's internal z-indices (200..1000) so they don't leak above our floating UI */
+.leaflet-container {
+  isolation: isolate;
+  z-index: 0;
+}
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -13,11 +20,13 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-terrain: var(--terrain);
+  --color-terrain-edge: var(--terrain-edge);
   --color-route: var(--route);
   --color-route-glow: var(--route-glow);
   --color-water: var(--water);
@@ -25,50 +34,60 @@
   --color-map-glow-primary: var(--map-glow-primary);
   --color-map-glow-secondary: var(--map-glow-secondary);
   --color-surface-shadow: var(--surface-shadow);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
 }
 
 :root {
-  --background: #f8f3e8;
-  --foreground: #1f2520;
-  --card: #fffdf7;
-  --card-foreground: #1f2520;
-  --muted: #eee8dc;
-  --muted-foreground: #697269;
-  --border: #ded8ca;
-  --primary: #184233;
-  --primary-foreground: #fffdf7;
-  --accent: #d7aa4d;
-  --accent-foreground: #1f2520;
-  --terrain: #9fbfae;
-  --route: #d8603f;
-  --route-glow: #d8603f24;
-  --water: #dbece5;
-  --map-grid: #1f252012;
-  --map-glow-primary: #2f6f5529;
-  --map-glow-secondary: #416a8f29;
-  --surface-shadow: #1f25201f;
+  --background: #f6efe1;
+  --foreground: #14202b;
+  --card: #ffffff;
+  --card-foreground: #14202b;
+  --muted: #ebe3d2;
+  --muted-foreground: #6a7585;
+  --border: rgba(20, 32, 43, 0.09);
+  --border-strong: rgba(20, 32, 43, 0.18);
+  --primary: #14384b;
+  --primary-foreground: #f6efe1;
+  --accent: #d96a45;
+  --accent-foreground: #14202b;
+  --terrain: #8c7449;
+  --terrain-edge: rgba(20, 32, 43, 0.1);
+  --route: #d96a45;
+  --route-glow: rgba(217, 106, 69, 0.22);
+  --water: #ede4d0;
+  --map-grid: rgba(20, 56, 75, 0.05);
+  --map-glow-primary: rgba(20, 56, 75, 0.14);
+  --map-glow-secondary: rgba(217, 106, 69, 0.1);
+  --surface-shadow: rgba(20, 32, 43, 0.14);
+  --glass: rgba(255, 253, 248, 0.88);
+  --glass-strong: rgba(255, 253, 248, 0.97);
 }
 
 .dark {
-  --background: #111713;
-  --foreground: #f4efe5;
-  --card: #18221c;
-  --card-foreground: #f4efe5;
-  --muted: #243025;
-  --muted-foreground: #aeb7ad;
-  --border: #314035;
-  --primary: #b8ddc2;
-  --primary-foreground: #102116;
-  --accent: #e3bb68;
-  --accent-foreground: #1d1708;
-  --terrain: #4d725f;
-  --route: #f0815e;
-  --route-glow: #f0815e29;
-  --water: #172821;
-  --map-grid: #f4efe512;
-  --map-glow-primary: #b8ddc224;
-  --map-glow-secondary: #7fa2c224;
-  --surface-shadow: #00000033;
+  --background: #08101a;
+  --foreground: #ece4d2;
+  --card: #121b27;
+  --card-foreground: #ece4d2;
+  --muted: #182231;
+  --muted-foreground: #94a0b2;
+  --border: rgba(236, 228, 210, 0.09);
+  --border-strong: rgba(236, 228, 210, 0.2);
+  --primary: #ecd29a;
+  --primary-foreground: #08101a;
+  --accent: #ff9268;
+  --accent-foreground: #08101a;
+  --terrain: #5e7d9e;
+  --terrain-edge: rgba(236, 228, 210, 0.07);
+  --route: #ff9268;
+  --route-glow: rgba(255, 146, 104, 0.22);
+  --water: #0b1521;
+  --map-grid: rgba(236, 228, 210, 0.04);
+  --map-glow-primary: rgba(236, 210, 154, 0.12);
+  --map-glow-secondary: rgba(255, 146, 104, 0.08);
+  --surface-shadow: rgba(0, 0, 0, 0.55);
+  --glass: rgba(18, 27, 39, 0.82);
+  --glass-strong: rgba(18, 27, 39, 0.95);
 }
 
 * {
@@ -84,4 +103,61 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes mmp-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.6;
+  }
+  80% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes mmp-draw {
+  from {
+    stroke-dashoffset: 220;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mmp-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+@keyframes mmp-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

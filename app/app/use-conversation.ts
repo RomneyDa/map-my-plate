@@ -181,12 +181,6 @@ export function useConversation(initialMealMap: MealMap) {
     [apiHistory, mealMap, pending],
   );
 
-  const reset = useCallback(() => {
-    setTurns([]);
-    setApiHistory([]);
-    setError(null);
-  }, []);
-
   return {
     mealMap,
     setMealMap,
@@ -194,6 +188,5 @@ export function useConversation(initialMealMap: MealMap) {
     pending,
     error,
     send,
-    reset,
   };
 }

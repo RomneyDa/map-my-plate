@@ -17,7 +17,6 @@ import { useTheme } from "next-themes";
 import {
   sampleMealMap,
   summarizeConfidence,
-  updateMealLocation,
   type IngredientOrigin,
   type MealLocation,
 } from "@map-my-plate/core";
@@ -561,15 +560,16 @@ export default function Home() {
     if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition((position) => {
-      setMealMap((current) =>
-        updateMealLocation(current, {
+      setMealMap((current) => ({
+        ...current,
+        location: {
           label: "Current location",
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           precision: "coordinate",
           source: "device",
-        }),
-      );
+        },
+      }));
     });
   }
 
@@ -619,7 +619,7 @@ export default function Home() {
               <LocationMenu
                 current={mealMap.location}
                 onSelect={(location) =>
-                  setMealMap((current) => updateMealLocation(current, location))
+                  setMealMap((current) => ({ ...current, location }))
                 }
                 onLocate={requestLocation}
                 onClose={() => setLocationOpen(false)}

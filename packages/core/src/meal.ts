@@ -4,7 +4,7 @@ export type EvidenceSource =
   | "label"
   | "public-production-data"
   | "public-trade-flow"
-  | "ai-inference"
+  | "inference"
   | "crop-origin-context";
 
 export const EVIDENCE_SOURCES: readonly EvidenceSource[] = [
@@ -13,7 +13,7 @@ export const EVIDENCE_SOURCES: readonly EvidenceSource[] = [
   "label",
   "public-production-data",
   "public-trade-flow",
-  "ai-inference",
+  "inference",
   "crop-origin-context",
 ] as const;
 
@@ -176,33 +176,6 @@ export const sampleMealMap: MealMap = {
     },
   ],
 };
-
-export function emptyMealMap(): MealMap {
-  return {
-    id: "draft",
-    title: "Untitled meal",
-    description: "",
-    location: {
-      label: "Unknown location",
-      latitude: 0,
-      longitude: 0,
-      precision: "unknown",
-      source: "manual",
-    },
-    ingredients: [],
-  };
-}
-
-export function updateMealLocation(
-  mealMap: MealMap,
-  location: MealLocation,
-): MealMap {
-  return {
-    ...mealMap,
-    location,
-    description: `A first-pass provenance estimate adjusted for ${location.label}.`,
-  };
-}
 
 export function summarizeConfidence(mealMap: MealMap): {
   averageConfidence: number;
